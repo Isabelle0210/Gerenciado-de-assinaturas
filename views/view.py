@@ -1,55 +1,119 @@
-#aqui ficara a logica 
-from datetime import date
+from datetime import date, datetime
 from sqlmodel import Session, select
 import __init__
 from models.database import engine
 from models.model import Assinaturas, Pagamentos
 
+
 class Assinatura_service:
     def __init__(self, engine):
         self.engine = engine
 
-    def crate(self, assinatura: Assinaturas):
-        #with é um gerenciador de contexto que fecha o banco de dados automaticamente 
+    def create(self, assinatura: Assinaturas):
+        # Gerenciador de contexto que fecha automaticamente a conexão com o banco
         with Session(self.engine) as session:
-            session.add(assinatura) #aqui adiciona a assinatura no banco de dados 
-            session.commit() # aqui salva a assinatura no banco de dados
+            session.add(assinatura)  # Adiciona a assinatura no banco de dados
+            session.commit()  # Salva as alterações no banco
             return assinatura
-        
+
     def list_all(self):
         with Session(self.engine) as session:
-            statement = select(Assinaturas) # aqui é a função que seleciona todas as assinaturas do banco de dados 
-            results = session.exec(statement).all() # aqui executa a função select e mostra todas as assinaturas
+            statement = select(Assinaturas)  # Seleciona todas as assinaturas
+            results = session.exec(statement).all()  # Executa e retorna os resultados
         return results
+
+    def delete(self, id):
+        with Session(self.engine) as session:
+            statement = select(Assinaturas).where(Assinaturas.id == id)
+            result = session.exec(statement).one()
+            session.delete(result)
+            session.commit()
+            print (result)
 
     def _has_pay(self, results):
         for result in results:
-            if result.date.month == date.today().month:
+            # Corrigir para `data_pagamento` em vez de `date`
+            if result.data_pagamento.month == date.today().month:
                 return True
         return False
-    
+
     def pay(self, assinatura: Assinaturas):
         with Session(self.engine) as session:
-            statement = select(Pagamentos).where(Assinaturas.empresa == assinatura.empresa)
+            statement = (
+                select(Pagamentos)
+                .join(Assinaturas)
+                .where(Assinaturas.empresa == assinatura.empresa)
+            )
             results = session.exec(statement).all()
 
             if self._has_pay(results):
-                questions = input('Essa assinatura já foi paga esse mês, deseja pagar novamente? (s/n)')
-
-                #se o usuário digitar 's' ele vai pagar a assinatura novamente, senao ele vai sair da função 
-                if not questions.upper() =='S':
+                question = input(
+                    "Essa assinatura já foi paga esse mês, deseja pagar novamente? (s/n): "
+                )
+                # Se o usuário digitar 'n', a função retorna sem realizar o pagamento
+                if question.strip().lower() != "s":
                     return
-            
+
+            # Adiciona um novo pagamento
             pay = Pagamentos(assinatura_id=assinatura.id, data_pagamento=date.today())
             session.add(pay)
             session.commit()
 
-ss = Assinatura_service(engine) 
+    def total_pay(self):
+        with Session(self.engine) as session:
+            statement = select(Assinaturas)
+            results = session.exec(statement).all()
 
-#assinatura = Assinaturas(empresa="netflix", site="www.netflix.com.br", data_assinatura=date.today(), valor=30)
+            total = 0 
+            for result in results:
+                total += result.valor
+            return float(total)
 
-#ss.crate(assinatura) # aqui é chamado a função que cria a assinatura no banco de dados
 
-#print(ss.list_all()) # aqui é chamado a função que lista todas as assinaturas do banco de dados
+# aqui eu estou fazendo uma função para pegar os ultimos 12 meses
+    def _get_last_12_months_native(self):
+        today = datetime.now()
+        year = today.year
+        month = today.month
+        last_12_months = []
+        for _ in range(12):
+            last_12_months.append((year, month))
+            month = month - 1
+            if month == 0:
+                month = 12
+                year = year - 1
+        return last_12_months [::-1]
 
-ss.pay(assinatura) # aqui é chamado a função que mostra os pagamentos da assinatura
+    #função para pegar o valor gasto em cada mes
+
+    def _get_values_for_months(self, last_12_months):
+        with Session(self.engine) as session: #sempre que for buscar algo no banco de dados precisa de uma session
+            statement = select(Pagamentos)
+            results = session.exec(statement).all()
+
+            values_for_months = [] #criando uma lista vazia para armazenar os valores de cada mes 
+            #iterando sobre os ultimos 12 meses
+            for i in last_12_months:
+                value = 0
+                for result in results:
+                    if result.data_pagamento.month == i[0] and result.data_pagamento.year == i[1]:
+                        value += float(result.assinatura.valor)
+                values_for_months.append(value)
+            return values_for_months
+            
+    def gen_chart(self):
+            last_12_months = self._get_last_12_months_native()
+            values_for_months = self._get_values_for_months(last_12_months)
+            
+            import matplotlib.pyplot as plt
+            
+            plt.plot(last_12_months, values_for_months)
+            plt.show()
+            
+
+# Inicialização do serviço
+ss = Assinatura_service(engine)
+# assinatura = Assinaturas(empresa="Empresa 1", data_assinatura=date.today(),site="www.isa", valor=1000)
+# ss.create(assinatura)
+
+print(ss.gen_chart())

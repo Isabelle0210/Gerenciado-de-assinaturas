@@ -6,7 +6,7 @@ sql_file_name = 'database.db'
 sqlite_url = f"sqlite:///{sql_file_name}"
 
 # aqui é a função que cria o banco de dados e mostra o que está acontecendo no terminal 
-engine = create_engine(sqlite_url, echo=True)
+engine = create_engine(sqlite_url, echo=False)
 
 
 if __name__ == "__main__":
