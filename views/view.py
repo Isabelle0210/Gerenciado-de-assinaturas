@@ -105,6 +105,8 @@ class Assinatura_service:
             last_12_months = self._get_last_12_months_native()
             values_for_months = self._get_values_for_months(last_12_months)
             
+            last_12_months = map(lambda x : self._get_last_12_months_native())
+
             import matplotlib.pyplot as plt
             
             plt.plot(last_12_months, values_for_months)
